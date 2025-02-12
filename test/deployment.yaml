@@ -1,0 +1,18 @@
+apiVersion: apps/v1  
+kind: Deployment  
+metadata:  
+  name: my-csi-driver  
+spec:  
+  replicas: 1  
+  selector:  
+    matchLabels:  
+      app: my-csi-driver  
+  template:  
+    metadata:  
+      labels:  
+        app: my-csi-driver  
+    spec:  
+      containers:  
+      - name: my-csi-driver  
+        image: csilearn:latest
+        imagePullPolicy: IfNotPresent
