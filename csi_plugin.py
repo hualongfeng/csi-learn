@@ -1,6 +1,7 @@
 from concurrent import futures  
 import grpc  
 import logging  
+import os
 from csi_pb2 import (  
     GetPluginInfoResponse,  
     GetPluginCapabilitiesResponse,  
@@ -9,6 +10,10 @@ from csi_pb2 import (
     CreateVolumeResponse,  
     Volume,  
     DeleteVolumeResponse,  
+    NodeStageVolumeResponse,
+    NodeUnstageVolumeResponse,
+    ControllerPublishVolumeResponse,
+    ControllerUnpublishVolumeResponse,
 )  
 from csi_pb2_grpc import IdentityServicer, ControllerServicer, NodeServicer, add_IdentityServicer_to_server, add_ControllerServicer_to_server, add_NodeServicer_to_server  
 
@@ -32,31 +37,48 @@ class IdentityService(IdentityServicer):
 
     def Probe(self, request, context):  
         logging.info("Probe called")
-        return ProbeResponse()  
+        # Implement health check logic here
+        return ProbeResponse(ready=True)
 
 class ControllerService(ControllerServicer):  
     def CreateVolume(self, request, context):  
         logging.info("CreateVolume called")
-        # Implement volume creation logic  
-        return CreateVolumeResponse(  
-            volume=Volume(volume_id="my-volume-id", capacity_bytes=request.capacity_range.required_bytes)  
-        )  
+        volume_id = request.name
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        os.makedirs(volume_path, exist_ok=True)
+        return CreateVolumeResponse(volume=Volume(volume_id=volume_id, capacity_bytes=request.capacity_range.required_bytes))
 
     def DeleteVolume(self, request, context):  
         logging.info("DeleteVolume called")
-        # Implement volume deletion logic  
+        volume_id = request.volume_id
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        if os.path.exists(volume_path):
+            os.rmdir(volume_path)
         return DeleteVolumeResponse()  
+
+    def ControllerPublishVolume(self, request, context):
+        logging.info("ControllerPublishVolume called")
+        return ControllerPublishVolumeResponse()
+
+    def ControllerUnpublishVolume(self, request, context):
+        logging.info("ControllerUnpublishVolume called")
+        return ControllerUnpublishVolumeResponse()
 
 class NodeService(NodeServicer):  
     def NodeStageVolume(self, request, context):  
         logging.info("NodeStageVolume called")
-        # Implement node stage volume logic  
-        return super().NodeStageVolume(request, context)  
+        staging_target_path = request.staging_target_path
+        volume_id = request.volume_id
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        os.symlink(volume_path, staging_target_path)
+        return NodeStageVolumeResponse()
 
     def NodeUnstageVolume(self, request, context):  
         logging.info("NodeUnstageVolume called")
-        # Implement node unstage volume logic  
-        return super().NodeUnstageVolume(request, context)  
+        staging_target_path = request.staging_target_path
+        if os.path.islink(staging_target_path):
+            os.unlink(staging_target_path)
+        return NodeUnstageVolumeResponse()
 
 def serve():  
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))  
@@ -69,5 +91,4 @@ def serve():
     server.wait_for_termination()  
 
 if __name__ == "__main__":  
-    logging.basicConfig()  
     serve()
