@@ -23,6 +23,8 @@ from csi_pb2 import (
     ListVolumesResponse,
     ControllerGetVolumeResponse,
     VolumeCondition,
+    ControllerServiceCapability,
+    ControllerGetCapabilitiesResponse,
 )
 from csi_pb2_grpc import (
     IdentityServicer,
@@ -89,16 +91,21 @@ class ControllerService(ControllerServicer):
 
     def ControllerGetCapabilities(self, request, context):
         logging.info("ControllerGetCapabilities called")
-        return GetPluginCapabilitiesResponse(
+        return ControllerGetCapabilitiesResponse(
             capabilities=[
-                PluginCapability(
-                    service=PluginCapability.Service(
-                        type=PluginCapability.Service.CONTROLLER_SERVICE
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.CREATE_DELETE_VOLUME
                     )
                 ),
-                PluginCapability(
-                    service=PluginCapability.Service(
-                        type=PluginCapability.Service.SNAPSHOT_METADATA_SERVICE
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.GET_CAPACITY
+                    )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.CREATE_DELETE_SNAPSHOT
                     )
                 )
             ]
