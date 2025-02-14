@@ -2,6 +2,7 @@ from concurrent import futures
 import grpc
 import logging
 import os
+import argparse
 from csi_pb2 import (
     GetPluginInfoResponse,
     GetPluginCapabilitiesResponse,
@@ -14,6 +15,14 @@ from csi_pb2 import (
     NodeUnstageVolumeResponse,
     ControllerPublishVolumeResponse,
     ControllerUnpublishVolumeResponse,
+    NodeGetInfoResponse,
+    NodeGetCapabilitiesResponse,
+    NodeServiceCapability,
+    CreateSnapshotResponse,
+    Snapshot,
+    ListVolumesResponse,
+    ControllerGetVolumeResponse,
+    VolumeCondition,
 )
 from csi_pb2_grpc import (
     IdentityServicer,
@@ -31,10 +40,18 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='CSI Plugin')
+parser.add_argument('--drivername', type=str, required=True, help='Name of the CSI driver')
+parser.add_argument('--v', type=int, default=0, help='Log level verbosity')
+parser.add_argument('--endpoint', type=str, required=True, help='CSI endpoint')
+parser.add_argument('--nodeid', type=str, required=True, help='Node ID')
+args = parser.parse_args()
+
 class IdentityService(IdentityServicer):
     def GetPluginInfo(self, request, context):
         logging.info("GetPluginInfo called")
-        return GetPluginInfoResponse(name="hostpath.csi.k8s.io", vendor_version="v0.1")
+        return GetPluginInfoResponse(name=args.drivername, vendor_version="v0.1")
 
     def GetPluginCapabilities(self, request, context):
         logging.info("GetPluginCapabilities called")
@@ -44,7 +61,7 @@ class IdentityService(IdentityServicer):
 
     def Probe(self, request, context):
         logging.info("Probe called")
-        return ProbeResponse(ready=True)
+        return ProbeResponse(ready={'value': True})
 
 class ControllerService(ControllerServicer):
     def CreateVolume(self, request, context):
@@ -70,6 +87,53 @@ class ControllerService(ControllerServicer):
         logging.info("ControllerUnpublishVolume called")
         return ControllerUnpublishVolumeResponse()
 
+    def ControllerGetCapabilities(self, request, context):
+        logging.info("ControllerGetCapabilities called")
+        return GetPluginCapabilitiesResponse(
+            capabilities=[
+                PluginCapability(
+                    service=PluginCapability.Service(
+                        type=PluginCapability.Service.CONTROLLER_SERVICE
+                    )
+                ),
+                PluginCapability(
+                    service=PluginCapability.Service(
+                        type=PluginCapability.Service.SNAPSHOT_METADATA_SERVICE
+                    )
+                )
+            ]
+        )
+
+    def CreateSnapshot(self, request, context):
+        logging.info("CreateSnapshot called")
+        snapshot_id = request.name
+        source_volume_id = request.source_volume_id
+        snapshot_path = f"/mnt/hostpath/snapshots/{snapshot_id}"
+        os.makedirs(snapshot_path, exist_ok=True)
+        # Simulate snapshot creation by copying the volume data
+        volume_path = f"/mnt/hostpath/{source_volume_id}"
+        if os.path.exists(volume_path):
+            os.system(f"cp -r {volume_path}/* {snapshot_path}/")
+        return CreateSnapshotResponse(snapshot=Snapshot(snapshot_id=snapshot_id, source_volume_id=source_volume_id, creation_time=None, size_bytes=0, ready_to_use=True))
+
+    def ListVolumes(self, request, context):
+        logging.info("ListVolumes called")
+        volumes = []
+        for volume_id in os.listdir("/mnt/hostpath"):
+            volume_path = f"/mnt/hostpath/{volume_id}"
+            if os.path.isdir(volume_path):
+                volumes.append(ListVolumesResponse.Entry(volume=Volume(volume_id=volume_id)))
+        return ListVolumesResponse(entries=volumes)
+
+    def GetVolume(self, request, context):
+        logging.info("GetVolume called")
+        volume_id = request.volume_id
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        if os.path.exists(volume_path):
+            return ControllerGetVolumeResponse(volume=Volume(volume_id=volume_id, condition=VolumeCondition(abnormal=False, message="Volume is healthy")))
+        else:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
+
 class NodeService(NodeServicer):
     def NodeStageVolume(self, request, context):
         logging.info("NodeStageVolume called")
@@ -82,17 +146,33 @@ class NodeService(NodeServicer):
     def NodeUnstageVolume(self, request, context):
         logging.info("NodeUnstageVolume called")
         staging_target_path = request.staging_target_path
-        if os.islink(staging_target_path):
+        if os.path.islink(staging_target_path):
             os.unlink(staging_target_path)
         return NodeUnstageVolumeResponse()
+
+    def NodeGetCapabilities(self, request, context):
+        logging.info("NodeGetCapabilities called")
+        return NodeGetCapabilitiesResponse(
+            capabilities=[
+                NodeServiceCapability(
+                    rpc=NodeServiceCapability.RPC(
+                        type=NodeServiceCapability.RPC.GET_VOLUME_STATS
+                    )
+                )
+            ]
+        )
+
+    def NodeGetInfo(self, request, context):
+        logging.info("NodeGetInfo called")
+        return NodeGetInfoResponse(node_id=args.nodeid)
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     add_IdentityServicer_to_server(IdentityService(), server)
     add_ControllerServicer_to_server(ControllerService(), server)
     add_NodeServicer_to_server(NodeService(), server)
-    server.add_insecure_port("[::]:50051")
-    logging.info("Starting CSI plugin...")
+    server.add_insecure_port(args.endpoint)
+    logging.info(f"Starting CSI plugin on {args.endpoint}...")
     server.start()
     server.wait_for_termination()
 
