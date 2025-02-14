@@ -25,6 +25,7 @@ from csi_pb2 import (
     VolumeCondition,
     ControllerServiceCapability,
     ControllerGetCapabilitiesResponse,
+    ControllerExpandVolumeResponse,
 )
 from csi_pb2_grpc import (
     IdentityServicer,
@@ -107,6 +108,21 @@ class ControllerService(ControllerServicer):
                     rpc=ControllerServiceCapability.RPC(
                         type=ControllerServiceCapability.RPC.CREATE_DELETE_SNAPSHOT
                     )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.EXPAND_VOLUME
+                    )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.LIST_VOLUMES
+                    )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.GET_VOLUME
+                    )
                 )
             ]
         )
@@ -138,6 +154,17 @@ class ControllerService(ControllerServicer):
         volume_path = f"/mnt/hostpath/{volume_id}"
         if os.path.exists(volume_path):
             return ControllerGetVolumeResponse(volume=Volume(volume_id=volume_id, condition=VolumeCondition(abnormal=False, message="Volume is healthy")))
+        else:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
+
+    def ControllerExpandVolume(self, request, context):
+        logging.info("ControllerExpandVolume called")
+        volume_id = request.volume_id
+        capacity_range = request.capacity_range
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        if os.path.exists(volume_path):
+            # Simulate volume expansion by updating the capacity
+            return ControllerExpandVolumeResponse(capacity_bytes=capacity_range.required_bytes)
         else:
             context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
 
