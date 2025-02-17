@@ -145,15 +145,25 @@ class ControllerService(ControllerServicer):
         for volume_id in os.listdir("/mnt/hostpath"):
             volume_path = f"/mnt/hostpath/{volume_id}"
             if os.path.isdir(volume_path):
-                volumes.append(ListVolumesResponse.Entry(volume=Volume(volume_id=volume_id)))
+                volume_condition = VolumeCondition(abnormal=False, message="Volume is healthy")
+                volume_status = ListVolumesResponse.VolumeStatus(
+                    published_node_ids=[],
+                    volume_condition=volume_condition
+                )
+                volumes.append(ListVolumesResponse.Entry(volume=Volume(volume_id=volume_id), status=volume_status))
         return ListVolumesResponse(entries=volumes)
 
-    def GetVolume(self, request, context):
-        logging.info("GetVolume called")
+    def ControllerGetVolume(self, request, context):
+        logging.info("ControllerGetVolume called")
         volume_id = request.volume_id
         volume_path = f"/mnt/hostpath/{volume_id}"
         if os.path.exists(volume_path):
-            return ControllerGetVolumeResponse(volume=Volume(volume_id=volume_id, condition=VolumeCondition(abnormal=False, message="Volume is healthy")))
+            volume_condition = VolumeCondition(abnormal=False, message="Volume is healthy")
+            volume_status = ControllerGetVolumeResponse.VolumeStatus(
+                published_node_ids=[],
+                volume_condition=volume_condition
+            )
+            return ControllerGetVolumeResponse(volume=Volume(volume_id=volume_id), status=volume_status)
         else:
             context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
 
