@@ -63,7 +63,7 @@ class IdentityService(IdentityServicer):
         )
 
     def Probe(self, request, context):
-        logging.info("Probe called")
+        # logging.info("Probe called")
         return ProbeResponse(ready={'value': True})
 
 class ControllerService(ControllerServicer):
@@ -84,10 +84,25 @@ class ControllerService(ControllerServicer):
 
     def ControllerPublishVolume(self, request, context):
         logging.info("ControllerPublishVolume called")
+        # Implement the logic to publish the volume
+        # For example, you can create a symbolic link to the volume path
+        volume_id = request.volume_id
+        node_id = request.node_id
+        volume_path = f"/mnt/hostpath/{volume_id}"
+        target_path = f"/mnt/{node_id}/{volume_id}"
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        os.symlink(volume_path, target_path)
         return ControllerPublishVolumeResponse()
 
     def ControllerUnpublishVolume(self, request, context):
         logging.info("ControllerUnpublishVolume called")
+        # Implement the logic to unpublish the volume
+        # For example, you can remove the symbolic link to the volume path
+        volume_id = request.volume_id
+        node_id = request.node_id
+        target_path = f"/mnt/{node_id}/{volume_id}"
+        if os.path.islink(target_path):
+            os.unlink(target_path)
         return ControllerUnpublishVolumeResponse()
 
     def ControllerGetCapabilities(self, request, context):
@@ -104,16 +119,11 @@ class ControllerService(ControllerServicer):
                         type=ControllerServiceCapability.RPC.GET_CAPACITY
                     )
                 ),
-                ControllerServiceCapability(
-                    rpc=ControllerServiceCapability.RPC(
-                        type=ControllerServiceCapability.RPC.CREATE_DELETE_SNAPSHOT
-                    )
-                ),
-                ControllerServiceCapability(
-                    rpc=ControllerServiceCapability.RPC(
-                        type=ControllerServiceCapability.RPC.EXPAND_VOLUME
-                    )
-                ),
+                # ControllerServiceCapability(
+                #     rpc=ControllerServiceCapability.RPC(
+                #         type=ControllerServiceCapability.RPC.EXPAND_VOLUME
+                #     )
+                # ),
                 ControllerServiceCapability(
                     rpc=ControllerServiceCapability.RPC(
                         type=ControllerServiceCapability.RPC.LIST_VOLUMES
@@ -123,21 +133,31 @@ class ControllerService(ControllerServicer):
                     rpc=ControllerServiceCapability.RPC(
                         type=ControllerServiceCapability.RPC.GET_VOLUME
                     )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.PUBLISH_UNPUBLISH_VOLUME
+                    )
+                ),
+                ControllerServiceCapability(
+                    rpc=ControllerServiceCapability.RPC(
+                        type=ControllerServiceCapability.RPC.VOLUME_CONDITION
+                    )
                 )
             ]
         )
 
-    def CreateSnapshot(self, request, context):
-        logging.info("CreateSnapshot called")
-        snapshot_id = request.name
-        source_volume_id = request.source_volume_id
-        snapshot_path = f"/mnt/hostpath/snapshots/{snapshot_id}"
-        os.makedirs(snapshot_path, exist_ok=True)
-        # Simulate snapshot creation by copying the volume data
-        volume_path = f"/mnt/hostpath/{source_volume_id}"
-        if os.path.exists(volume_path):
-            os.system(f"cp -r {volume_path}/* {snapshot_path}/")
-        return CreateSnapshotResponse(snapshot=Snapshot(snapshot_id=snapshot_id, source_volume_id=source_volume_id, creation_time=None, size_bytes=0, ready_to_use=True))
+    # def CreateSnapshot(self, request, context):
+    #     logging.info("CreateSnapshot called")
+    #     snapshot_id = request.name
+    #     source_volume_id = request.source_volume_id
+    #     snapshot_path = f"/mnt/hostpath/snapshots/{snapshot_id}"
+    #     os.makedirs(snapshot_path, exist_ok=True)
+    #     # Simulate snapshot creation by copying the volume data
+    #     volume_path = f"/mnt/hostpath/{source_volume_id}"
+    #     if os.path.exists(volume_path):
+    #         os.system(f"cp -r {volume_path}/* {snapshot_path}/")
+    #     return CreateSnapshotResponse(snapshot=Snapshot(snapshot_id=snapshot_id, source_volume_id=source_volume_id, creation_time=None, size_bytes=0, ready_to_use=True))
 
     def ListVolumes(self, request, context):
         logging.info("ListVolumes called")
@@ -167,16 +187,16 @@ class ControllerService(ControllerServicer):
         else:
             context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
 
-    def ControllerExpandVolume(self, request, context):
-        logging.info("ControllerExpandVolume called")
-        volume_id = request.volume_id
-        capacity_range = request.capacity_range
-        volume_path = f"/mnt/hostpath/{volume_id}"
-        if os.path.exists(volume_path):
-            # Simulate volume expansion by updating the capacity
-            return ControllerExpandVolumeResponse(capacity_bytes=capacity_range.required_bytes)
-        else:
-            context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
+    # def ControllerExpandVolume(self, request, context):
+    #     logging.info("ControllerExpandVolume called")
+    #     volume_id = request.volume_id
+    #     capacity_range = request.capacity_range
+    #     volume_path = f"/mnt/hostpath/{volume_id}"
+    #     if os.path.exists(volume_path):
+    #         # Simulate volume expansion by updating the capacity
+    #         return ControllerExpandVolumeResponse(capacity_bytes=capacity_range.required_bytes)
+    #     else:
+    #         context.abort(grpc.StatusCode.NOT_FOUND, "Volume not found")
 
 class NodeService(NodeServicer):
     def NodeStageVolume(self, request, context):
