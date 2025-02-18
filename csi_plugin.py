@@ -84,12 +84,23 @@ class ControllerService(ControllerServicer):
 
     def ControllerPublishVolume(self, request, context):
         logging.info("ControllerPublishVolume called")
-        # Implement the logic to publish the volume
-        # For example, you can create a symbolic link to the volume path
         volume_id = request.volume_id
         node_id = request.node_id
         volume_path = f"/mnt/hostpath/{volume_id}"
         target_path = f"/mnt/{node_id}/{volume_id}"
+
+        # Check if the target path already exists
+        if os.path.exists(target_path):
+            if os.path.islink(target_path):
+                # If it's a symbolic link, check if it points to the correct volume path
+                if os.readlink(target_path) == volume_path:
+                    logging.info(f"Symbolic link {target_path} already exists and points to the correct volume path")
+                    return ControllerPublishVolumeResponse()
+                else:
+                    context.abort(grpc.StatusCode.ALREADY_EXISTS, f"Target path {target_path} already exists and points to a different volume path")
+            else:
+                context.abort(grpc.StatusCode.ALREADY_EXISTS, f"Target path {target_path} already exists and is not a symbolic link")
+
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         os.symlink(volume_path, target_path)
         return ControllerPublishVolumeResponse()
