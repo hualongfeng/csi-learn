@@ -1,4 +1,4 @@
-  # All of the individual sidecar RBAC roles get bound
+# All of the individual sidecar RBAC roles get bound
 # to this account.
 kind: ServiceAccount
 apiVersion: v1
@@ -51,6 +51,10 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["volumeattachments"]
   verbs: ["get", "list", "watch", "update", "patch"]
+# 核心权限：VolumeAttachment 的状态更新
+- apiGroups: ["storage.k8s.io"]
+  resources: ["volumeattachments/status"]
+  verbs: ["patch"]
 # 核心权限：PersistentVolume 的读取
 - apiGroups: [""]
   resources: ["persistentvolumes"]
@@ -84,7 +88,6 @@ metadata:
     app.kubernetes.io/part-of: csi-driver-host-path
     app.kubernetes.io/name: csi-hostpathplugin
     app.kubernetes.io/component: attacher-cluster-role
-  name: csi-hostpathplugin-attacher-cluster-role
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
