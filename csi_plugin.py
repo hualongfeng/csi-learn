@@ -51,6 +51,8 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+logger = logging.getLogger('CSIPlugin')
+
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='CSI Plugin')
 parser.add_argument('--drivername', type=str, required=True, help='Name of the CSI driver')
@@ -61,11 +63,11 @@ args = parser.parse_args()
 
 class IdentityService(IdentityServicer):
     def GetPluginInfo(self, request, context):
-        logging.info("GetPluginInfo called")
+        logger.info("GetPluginInfo called")
         return GetPluginInfoResponse(name=args.drivername, vendor_version="v0.1")
 
     def GetPluginCapabilities(self, request, context):
-        logging.info("GetPluginCapabilities called")
+        logger.info("GetPluginCapabilities called")
         return GetPluginCapabilitiesResponse(
             capabilities=[
                 PluginCapability(
@@ -82,19 +84,20 @@ class IdentityService(IdentityServicer):
         )
 
     def Probe(self, request, context):
-        # logging.info("Probe called")
+        # logger.info("Probe called")
         return ProbeResponse(ready={'value': True})
 
 class ControllerService(ControllerServicer):
     VOLUME_ROOT = "/mnt/hostpath"  # 假设卷存储在宿主机固定目录下
 
     def ControllerGetVolume(self, request: ControllerGetVolumeRequest, context):
-        logging.info("ControllerGetVolume called")
+        logger.info(f"ControllerGetVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
 
         # 1. 验证卷是否存在
         vol_path = os.path.join(self.VOLUME_ROOT, volume_id)
         if not os.path.exists(vol_path):
+            logger.error(f"Volume {volume_id} not found")
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(f"Volume {volume_id} not found")
             return ControllerGetVolumeResponse()
@@ -105,6 +108,7 @@ class ControllerService(ControllerServicer):
             capacity_bytes = stat.f_blocks * stat.f_frsize  # 总容量
             used_bytes = (stat.f_blocks - stat.f_bfree) * stat.f_frsize
         except Exception as e:
+            logger.error(f"Failed to get volume stats for {volume_id}: {str(e)}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Failed to get volume stats: {str(e)}")
             return ControllerGetVolumeResponse()
@@ -139,11 +143,12 @@ class ControllerService(ControllerServicer):
         )
 
     def ValidateVolumeCapabilities(self, request, context):
-        logging.info("ValidateVolumeCapabilities called")
+        logger.info(f"ValidateVolumeCapabilities called for volume: {request.volume_id}")
         # 检查卷是否存在
         vol_id = request.volume_id
         host_path = f"/mnt/hostpath/{vol_id}"
         if not os.path.exists(host_path):
+            logger.error(f"Volume {vol_id} not found")
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(f"Volume {vol_id} not found")
             return ValidateVolumeCapabilitiesResponse()
@@ -172,7 +177,7 @@ class ControllerService(ControllerServicer):
         )
 
     def CreateVolume(self, request, context):
-        logging.info("CreateVolume called")
+        logger.info(f"CreateVolume called for volume: {request.name}")
         volume_id = request.name
         capacity = request.capacity_range.required_bytes
         path = request.parameters.get("path", f"/mnt/hostpath/{volume_id}")
@@ -187,21 +192,21 @@ class ControllerService(ControllerServicer):
         ))
 
     def DeleteVolume(self, request, context):
-        logging.info("DeleteVolume called")
+        logger.info(f"DeleteVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
         volume_path = os.path.join(self.VOLUME_ROOT, volume_id)  # 使用 volume_id 构建路径
 
         try:
             if os.path.exists(volume_path):
                 shutil.rmtree(volume_path)  # 递归删除目录
-                logging.info(f"Deleted HostPath volume: {volume_path}")
+                logger.info(f"Deleted HostPath volume: {volume_path}")
             return DeleteVolumeResponse()
         except OSError as e:
-            logging.error(f"Failed to delete {volume_path}: {e}")
+            logger.error(f"Failed to delete {volume_path}: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"Failed to delete {volume_path}: {e}")
 
     def ControllerPublishVolume(self, request, context):
-        logging.info("ControllerPublishVolume called")
+        logger.info(f"ControllerPublishVolume called for volume: {request.volume_id} to node: {request.node_id}")
         volume_id = request.volume_id
         node_id = request.node_id
 
@@ -209,16 +214,16 @@ class ControllerService(ControllerServicer):
         return ControllerPublishVolumeResponse(publish_context={})
 
     def ControllerUnpublishVolume(self, request, context):
-        logging.info("ControllerUnpublishVolume called")
+        logger.info(f"ControllerUnpublishVolume called for volume: {request.volume_id} from node: {request.node_id}")
         volume_id = request.volume_id
         node_id = request.node_id
 
         # HostPath 无需物理解绑操作
-        logging.info(f"ControllerUnpublishVolume: No action needed for HostPath")
+        logger.info(f"ControllerUnpublishVolume: No action needed for HostPath")
         return ControllerUnpublishVolumeResponse()
 
     def ControllerGetCapabilities(self, request, context):
-        logging.info("ControllerGetCapabilities called")
+        logger.info("ControllerGetCapabilities called")
         return ControllerGetCapabilitiesResponse(
             capabilities=[
                 ControllerServiceCapability(
@@ -255,7 +260,7 @@ class ControllerService(ControllerServicer):
         )
 
     def ListVolumes(self, request, context):
-        logging.info("ListVolumes called")
+        logger.info("ListVolumes called")
         base_dir = "/mnt/hostpath"
         entries = []
 
@@ -290,20 +295,21 @@ class ControllerService(ControllerServicer):
 
 class NodeService(NodeServicer):
     def NodeStageVolume(self, request, context):
-        logging.info("NodeStageVolume called")
+        logger.info(f"NodeStageVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
         staging_target_path = request.staging_target_path
         src_path = request.volume_context["path"]
 
         # Check if the source path exists
         if not os.path.exists(src_path):
+            logger.error(f"HostPath directory {src_path} does not exist")
             context.abort(grpc.StatusCode.NOT_FOUND, f"HostPath directory {src_path} does not exist")
 
         # HostPath 通常无需额外操作（如格式化），直接返回成功
         return NodeStageVolumeResponse()
 
     def NodeUnstageVolume(self, request, context):
-        logging.info("NodeUnstageVolume called")
+        logger.info(f"NodeUnstageVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
         staging_target_path = request.staging_target_path
 
@@ -311,23 +317,23 @@ class NodeService(NodeServicer):
             # 如果存在全局挂载点则卸载
             if os.path.ismount(staging_target_path):
                 subprocess.run(["umount", staging_target_path], check=True)
-                logging.info(f"Unmounted staging path: {staging_target_path}")
+                logger.info(f"Unmounted staging path: {staging_target_path}")
 
             # 删除临时目录
             if os.path.exists(staging_target_path):
                 os.rmdir(staging_target_path)
-                logging.info(f"Removed staging directory: {staging_target_path}")
+                logger.info(f"Removed staging directory: {staging_target_path}")
 
             return NodeUnstageVolumeResponse()
         except subprocess.CalledProcessError as e:
-            logging.error(f"Unmount failed: {e}")
+            logger.error(f"Unmount failed: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"Unmount failed: {e}")
         except Exception as e:
-            logging.error(f"An error occurred while unstaging volume {volume_id}: {e}")
+            logger.error(f"An error occurred while unstaging volume {volume_id}: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"An error occurred while unstaging volume {volume_id}: {e}")
 
     def NodePublishVolume(self, request, context):
-        logging.info("NodePublishVolume called")
+        logger.info(f"NodePublishVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
         target_path = request.target_path
         staging_target_path = request.staging_target_path
@@ -336,6 +342,7 @@ class NodeService(NodeServicer):
         try:
             # Check if the staging target path exists
             if not os.path.exists(staging_target_path):
+                logger.error(f"Staging target path {staging_target_path} does not exist")
                 context.abort(grpc.StatusCode.NOT_FOUND, f"Staging target path {staging_target_path} does not exist")
 
             # Create the directory for the target path if it does not exist
@@ -343,18 +350,18 @@ class NodeService(NodeServicer):
 
             # Perform bind mount: mount the host path directory to the pod path
             subprocess.run(["mount", "--bind", src_path, target_path], check=True)
-            logging.info(f"Mounted {src_path} to {target_path}")
+            logger.info(f"Mounted {src_path} to {target_path}")
         except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to mount {src_path} to {target_path}: {e}")
+            logger.error(f"Failed to mount {src_path} to {target_path}: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"Failed to mount {src_path} to {target_path}: {e}")
         except Exception as e:
-            logging.error(f"An error occurred while publishing volume {volume_id}: {e}")
+            logger.error(f"An error occurred while publishing volume {volume_id}: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"An error occurred while publishing volume {volume_id}: {e}")
 
         return NodePublishVolumeResponse()
 
     def NodeUnpublishVolume(self, request, context):
-        logging.info("NodeUnpublishVolume called")
+        logger.info(f"NodeUnpublishVolume called for volume: {request.volume_id}")
         volume_id = request.volume_id
         target_path = request.target_path
 
@@ -362,23 +369,23 @@ class NodeService(NodeServicer):
             # 卸载 Pod 挂载点
             if os.path.ismount(target_path):
                 subprocess.run(["umount", target_path], check=True)
-                logging.info(f"Unmounted pod path: {target_path}")
+                logger.info(f"Unmounted pod path: {target_path}")
 
             # 删除空目录（Kubernetes 预期行为）
             if os.path.exists(target_path):
                 os.rmdir(target_path)
-                logging.info(f"Removed pod mount directory: {target_path}")
+                logger.info(f"Removed pod mount directory: {target_path}")
 
             return NodeUnpublishVolumeResponse()
         except subprocess.CalledProcessError as e:
-            logging.error(f"Unmount failed: {e}")
+            logger.error(f"Unmount failed: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"Unmount failed: {e}")
         except Exception as e:
-            logging.error(f"An error occurred while unpublishing volume {volume_id}: {e}")
+            logger.error(f"An error occurred while unpublishing volume {volume_id}: {e}")
             context.abort(grpc.StatusCode.INTERNAL, f"An error occurred while unpublishing volume {volume_id}: {e}")
 
     def NodeGetCapabilities(self, request, context):
-        logging.info("NodeGetCapabilities called")
+        logger.info("NodeGetCapabilities called")
         return NodeGetCapabilitiesResponse(
             capabilities=[
                 NodeServiceCapability(
@@ -405,16 +412,17 @@ class NodeService(NodeServicer):
         )
 
     def NodeGetInfo(self, request, context):
-        logging.info("NodeGetInfo called")
+        logger.info("NodeGetInfo called")
         return NodeGetInfoResponse(
             node_id=args.nodeid,  # 保持使用 args.nodeid
         )
 
     def NodeGetVolumeStats(self, request, context):
-        logging.info("NodeGetVolumeStats called")
+        logger.info(f"NodeGetVolumeStats called for volume path: {request.volume_path}")
         path = request.volume_path  # 例如 /data/hostpath-vol1
 
         if not os.path.exists(path):
+            logger.error(f"Path {path} not found")
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(f"Path {path} not found")
             return NodeGetVolumeStatsResponse()
@@ -440,7 +448,7 @@ class NodeService(NodeServicer):
                 )
             )
         except Exception as e:
-            logging.error(f"Failed to get stats for path {path}: {e}")
+            logger.error(f"Failed to get stats for path {path}: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Failed to get stats: {str(e)}")
             return NodeGetVolumeStatsResponse()
@@ -451,7 +459,7 @@ def serve():
     add_ControllerServicer_to_server(ControllerService(), server)
     add_NodeServicer_to_server(NodeService(), server)
     server.add_insecure_port(args.endpoint)
-    logging.info(f"Starting CSI plugin on {args.endpoint}...")
+    logger.info(f"Starting CSI plugin on {args.endpoint}...")
     server.start()
     server.wait_for_termination()
 
