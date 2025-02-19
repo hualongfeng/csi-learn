@@ -1,0 +1,17 @@
+# app
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+    - mountPath: /data
+      name: hbase-vol
+      # mountPropagation: Bidirectional
+  volumes:
+  - name: hbase-vol
+    persistentVolumeClaim:
+      claimName: my-pvc
