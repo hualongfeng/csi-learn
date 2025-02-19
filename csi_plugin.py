@@ -188,7 +188,8 @@ class ControllerService(ControllerServicer):
 
     def DeleteVolume(self, request, context):
         logging.info("DeleteVolume called")
-        volume_path = request.volume_context["path"]  # 使用 request.volume_context["path"] 获取路径
+        volume_id = request.volume_id
+        volume_path = os.path.join(self.VOLUME_ROOT, volume_id)  # 使用 volume_id 构建路径
 
         try:
             if os.path.exists(volume_path):
