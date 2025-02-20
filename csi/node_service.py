@@ -1,7 +1,7 @@
 import os
 import subprocess
 import logging
-from csi_pb2 import (
+from csi.csi_pb2 import (
     NodeStageVolumeResponse,
     NodeUnstageVolumeResponse,
     NodePublishVolumeResponse,
@@ -14,7 +14,7 @@ from csi_pb2 import (
     Topology,
     NodeServiceCapability
 )
-from csi_pb2_grpc import NodeServicer
+from csi.csi_pb2_grpc import NodeServicer
 
 logger = logging.getLogger('CSIPlugin')
 

@@ -1,11 +1,11 @@
 from concurrent import futures
 import grpc
 import logging
-from options import parse_args
-from identity_service import IdentityService
-from controller_service import ControllerService
-from node_service import NodeService
-from csi_pb2_grpc import (
+from csi.options import parse_args
+from csi.identity_service import IdentityService
+from csi.controller_service import ControllerService
+from csi.node_service import NodeService
+from csi.csi_pb2_grpc import (
     add_IdentityServicer_to_server,
     add_ControllerServicer_to_server,
     add_NodeServicer_to_server,

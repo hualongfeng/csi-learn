@@ -1,6 +1,6 @@
 import logging
-from csi_pb2 import GetPluginInfoResponse, GetPluginCapabilitiesResponse, PluginCapability, ProbeResponse
-from csi_pb2_grpc import IdentityServicer
+from csi.csi_pb2 import GetPluginInfoResponse, GetPluginCapabilitiesResponse, PluginCapability, ProbeResponse
+from csi.csi_pb2_grpc import IdentityServicer
 
 logger = logging.getLogger('CSIPlugin')
 

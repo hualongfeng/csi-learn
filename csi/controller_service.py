@@ -2,7 +2,7 @@ import os
 import shutil
 import logging
 import grpc
-from csi_pb2 import (
+from csi.csi_pb2 import (
     CreateVolumeResponse,
     DeleteVolumeResponse,
     ControllerPublishVolumeResponse,
@@ -18,7 +18,7 @@ from csi_pb2 import (
     ControllerGetVolumeRequest,
     ControllerGetCapabilitiesResponse
 )
-from csi_pb2_grpc import ControllerServicer
+from csi.csi_pb2_grpc import ControllerServicer
 
 logger = logging.getLogger('CSIPlugin')
 

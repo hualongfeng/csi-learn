@@ -186,7 +186,6 @@ spec:
       containers:
         - name: hostpath
           image: ghcr.io/hualongfeng/csilearn:latest #registry.k8s.io/sig-storage/hostpathplugin:v1.15.0
-          command: ["python3", "/app/csi_plugin.py"]  # 确保这里是你的可执行文件路径
           args:
             - "--drivername=hostpath.csi.k8s.io"
             - "--v=5"
