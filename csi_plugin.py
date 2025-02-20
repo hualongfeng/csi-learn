@@ -182,6 +182,14 @@ class ControllerService(ControllerServicer):
         capacity = request.capacity_range.required_bytes
         path = request.parameters.get("path", f"/mnt/hostpath/{volume_id}")
 
+        if os.path.exists(path):
+            context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+            return CreateVolumeResponse(volume=Volume(
+                volume_id=volume_id,
+                capacity_bytes=capacity,
+                volume_context={"path": path}
+            ))
+
         # Create the host path directory
         os.makedirs(path, exist_ok=True)
 
